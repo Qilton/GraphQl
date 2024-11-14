@@ -1,33 +1,36 @@
-import express  from "express";
-import { ApolloServer } from '@apollo/server';
-import {expressMiddleware} from "@apollo/server/express4"
-import bodyParser from "body-parser";
+import express from "express";
+import { expressMiddleware } from "@apollo/server/express4";
+import createApolloGraphqlServer from "./graphql";
+import UserService from "./services/user";
 
-const app=express()
-const PORT=8000;
+async function init() {
+  const app = express();
+  const PORT = Number(process.env.PORT) || 8000;
 
-async function init(){
-    const gqlserver=new ApolloServer({
-        typeDefs:`type Query{
-                    hello:String, 
-                    say(name:String):String       
-        }`,
-        resolvers:{
-            Query:{
-                hello:()=>"Hey there i am a graphql server",
-                say:(_,{name}:{name:String})=>`Hey ${name} How are u`
-            }
-        },
+  app.use(express.json());
+
+  app.get("/", (req, res) => {
+    res.json({ message: "Server is up and running" });
+  });
+
+  app.use(
+    "/graphql",
+    expressMiddleware(await createApolloGraphqlServer(), {
+      context: async ({ req }) => {
+        // @ts-ignore
+        const token = req.headers["token"];
+
+        try {
+          const user = UserService.decodeJWTToken(token as string);
+          return { user };
+        } catch (error) {
+          return {};
+        }
+      },
     })
-    await gqlserver.start()
-    
-    app.get('/',(req,res)=>{
-        res.json({message:"Server is up and running"})
-    })
-    app.use(bodyParser.json())
-    app.use('/graphql',expressMiddleware(gqlserver))
-    app.listen(PORT,()=>{console.log("Server started at port 8000")})
+  );
+
+  app.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
 }
 
-init()
-    
+init();
